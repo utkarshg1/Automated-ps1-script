@@ -42,7 +42,7 @@ function Ensure-Admin {
     if (-not $isAdmin) {
         Write-Host "Relaunching as Administrator..."
         Start-Process pwsh -Verb RunAs `
-            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","`"$($MyInvocation.MyCommand.Path)`""
+            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","`"$($MyInvocation.MyCommand.Path)`"" 
         exit
     }
 }
@@ -188,8 +188,10 @@ try {
 }
 catch {
     Write-Error "Setup error: $($_.Exception.Message)"
+    # Make sure we still call Stop-Logging even if there's an error
+    Stop-Logging
     exit 1
 }
-finally {
-    Stop-Logging
-}
+
+# Always stop logging at the end, regardless of success or failure
+Stop-Logging
