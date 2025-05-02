@@ -1,180 +1,195 @@
 <#
 .SYNOPSIS
   Automated dev-environment setup: Chocolatey, Git, GitHub CLI, VS Code & extensions, Git identity, and GitHub auth.
-  Modular version—with each major step in its own function.
-
 .DESCRIPTION
   - Bypass PS execution policy for this session.
   - Ensure elevated (Admin) privileges.
   - Install Chocolatey if missing.
-  - Import Chocolatey profile & refresh env.
-  - Install Git, gh, VS Code (checks for existing).
-  - Refresh env again.
-  - Install VS Code Python, Jupyter, Black extensions (checks for existing).
-  - Prompt for Git user.name/email (validated).
+  - Install Git, gh, VS Code.
+  - Install VS Code Python, Jupyter, Black extensions.
+  - Prompt for Git user.name/email.
   - Configure Git global identity.
-  - Run interactive GitHub CLI login.
-  - Log all actions, trap errors.
+  - Run GitHub CLI login.
+  - Log all actions; trap errors.
 #>
 
-# -------------------------------
-# Initialization & Helper Functions
-# -------------------------------
-function Ensure-ExecutionPolicy {
-    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+# ---------------------------------------
+# Globals & Logging
+# ---------------------------------------
+$TranscriptStarted = $false
+$LogFile = Join-Path $env:TEMP "setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+
+function Start-Logging {
+    Start-Transcript -Path $LogFile -Force
+    $global:TranscriptStarted = $true
+    Write-Host "Logging to $LogFile"
 }
 
+function Stop-Logging {
+    if ($global:TranscriptStarted) {
+        Stop-Transcript
+        Write-Host "Setup complete. Log file: $LogFile"
+    }
+}
+
+# ---------------------------------------
+# Elevation & Execution Policy
+# ---------------------------------------
 function Ensure-Admin {
-    if (-not ([Security.Principal.WindowsPrincipal] `
-           [Security.Principal.WindowsIdentity]::GetCurrent()
-        ).IsInRole([Security.Principal.WindowsBuiltinRole] "Administrator")) {
-        Write-Host "🔄 Relaunching as Administrator…"
-        Start-Process pwsh -Verb RunAs -ArgumentList "-NoProfile", "-ExecutionPolicy Bypass", "-File `"$PSCommandPath`""
+    $isAdmin = ([Security.Principal.WindowsPrincipal] `
+        [Security.Principal.WindowsIdentity]::GetCurrent()
+    ).IsInRole([Security.Principal.WindowsBuiltinRole] "Administrator")
+    if (-not $isAdmin) {
+        Write-Host "Relaunching as Administrator..."
+        Start-Process pwsh -Verb RunAs `
+            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","`"$($MyInvocation.MyCommand.Path)`""
         exit
     }
 }
 
-function Start-Logging {
-    $global:LogFilePath = Join-Path $env:TEMP "setup_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-    Start-Transcript -Path $LogFilePath
+function Ensure-ExecutionPolicy {
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 }
 
-function Stop-Logging {
-    Stop-Transcript
-    Write-Host "🚀 Setup complete! Log file: $global:LogFilePath"
-}
-
-# -------------------------------
-# Chocolatey Installation & Environment Refresh
-# -------------------------------
+# ---------------------------------------
+# Chocolatey & Environment
+# ---------------------------------------
 function Install-Chocolatey {
-    if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
-        Write-Host "🔄 Installing Chocolatey..."
-        [System.Net.ServicePointManager]::SecurityProtocol = `
-          [System.Net.SecurityProtocolType]::Tls12
-        iex ((New-Object System.Net.WebClient).DownloadString(
-            'https://community.chocolatey.org/install.ps1'))
-        Write-Host "✅ Chocolatey installed."
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing Chocolatey..."
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        iex ((New-Object Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        Write-Host "Chocolatey installed."
     } else {
-        Write-Host "✅ Chocolatey already present."
+        Write-Host "Chocolatey already present."
     }
 }
 
 function Refresh-Environment {
-    $env:ChocolateyInstall = Split-Path (Split-Path (Get-Command choco).Source) -Parent
-    $profilePath = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
-    if (Test-Path $profilePath) { Import-Module $profilePath }
-    Update-SessionEnvironment
+    $chocoPath = (Get-Command choco -ErrorAction SilentlyContinue).Source
+    if ($chocoPath) {
+        $installRoot = Split-Path (Split-Path $chocoPath -Parent) -Parent
+        $profilePath = Join-Path $installRoot 'helpers\chocolateyProfile.psm1'
+        if (Test-Path $profilePath) { Import-Module $profilePath }
+    }
+    Try { Update-SessionEnvironment } Catch { }
 }
 
-# -------------------------------
+# ---------------------------------------
 # Package Installation
-# -------------------------------
+# ---------------------------------------
 function Install-PackageIfMissing {
-    param($CommandName, $ChocoName)
+    param(
+        [string]$CommandName,
+        [string]$ChocoName
+    )
     if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
-        Write-Host "  ➡️ $ChocoName not found. Installing..."
+        Write-Host "$ChocoName not found. Installing..."
         choco install $ChocoName -y
     } else {
-        Write-Host "  ✅ $ChocoName already installed."
+        Write-Host "$ChocoName already installed."
     }
 }
 
-# -------------------------------
-# VS Code Extension Installation
-# -------------------------------
+# ---------------------------------------
+# VS Code Extensions
+# ---------------------------------------
 function Is-VSCodeExtensionInstalled {
-    param($extensionId)
-    try {
-        $installed = code --list-extensions
-        return $installed -contains $extensionId
-    } catch {
-        Write-Warning "⚠️ Could not list VS Code extensions. Assuming not installed."
+    param([string]$ExtensionId)
+    Try {
+        return (code --list-extensions) -contains $ExtensionId
+    } Catch {
         return $false
     }
 }
 
 function Install-VSCodeExtensionIfMissing {
-    param($extensionId)
-    if (-not (Is-VSCodeExtensionInstalled $extensionId)) {
-        Write-Host "  ➡️ $extensionId not found. Installing..."
-        code --install-extension $extensionId
+    param([string]$ExtensionId)
+    if (-not (Is-VSCodeExtensionInstalled $ExtensionId)) {
+        Write-Host "$ExtensionId not found. Installing..."
+        code --install-extension $ExtensionId
     } else {
-        Write-Host "  ✅ $extensionId already installed."
+        Write-Host "$ExtensionId already installed."
     }
 }
 
-# -------------------------------
+# ---------------------------------------
 # Git Configuration
-# -------------------------------
+# ---------------------------------------
 function Prompt-NonEmpty {
-    param($prompt)
+    param([string]$PromptText)
     do {
-        $resp = Read-Host -Prompt $prompt
+        $resp = Read-Host -Prompt $PromptText
     } while ([string]::IsNullOrWhiteSpace($resp))
     return $resp
 }
 
 function Configure-GitIdentity {
-    Write-Host "`n🔧 Configuring Git global user.name and user.email…"
-    $global:UserName  = Prompt-NonEmpty 'Enter your Git user.name'
-    $global:UserEmail = Prompt-NonEmpty 'Enter your Git user.email'
-    git config --global user.name  $global:UserName
-    git config --global user.email $global:UserEmail
+    Write-Host ""
+    Write-Host "Configuring Git global user.name and user.email..."
+    $name  = Prompt-NonEmpty 'Enter your Git user.name'
+    $email = Prompt-NonEmpty 'Enter your Git user.email'
+    git config --global user.name  $name
+    git config --global user.email $email
 }
 
-# -------------------------------
-# GitHub CLI Authentication
-# -------------------------------
+# ---------------------------------------
+# GitHub CLI Login
+# ---------------------------------------
 function Authenticate-GitHubCLI {
-    Write-Host "`n🔐 Launching GitHub CLI login…"
+    Write-Host ""
+    Write-Host "Launching GitHub CLI login..."
     gh auth login --hostname github.com --scopes repo,workflow
 }
 
-# -------------------------------
-# Final Validation
-# -------------------------------
+# ---------------------------------------
+# Validation
+# ---------------------------------------
 function Validate-Setup {
-    Write-Host "`n🛠️  Validation Results:"
-    Write-Host "• Git version: $(git --version)"
-    Write-Host "• gh version:  $(gh --version)"
-    Write-Host "• VS Code version: $(code --version)"
-    Write-Host "🔍 PATH entries:"
-    $env:Path -split ';' |
-      Where-Object { $_ -match 'Git|GitHubCLI|VSCode' } |
-      ForEach-Object { Write-Host "   $_" }
+    Write-Host ""
+    Write-Host "Validation Results:"
+    Write-Host "  Git version: $(git --version)"
+    Write-Host "  gh version:  $(gh --version)"
+    Write-Host "  Code version: $(code --version)"
+    Write-Host "  PATH entries:"
+    $env:Path -split ';' | Where-Object { $_ -match 'Git|gh.exe|Code.exe' } |
+      ForEach-Object { Write-Host "    $_" }
 }
 
-# -------------------------------
-# Main Script Execution
-# -------------------------------
+# ---------------------------------------
+# Main
+# ---------------------------------------
 try {
-    Ensure-ExecutionPolicy
+    Start-Logging
     Ensure-Admin
+    Ensure-ExecutionPolicy
 
     Install-Chocolatey
     Refresh-Environment
 
-    Write-Host "`n🔄 Checking and installing Git, GitHub CLI, and VS Code..."
-    Install-PackageIfMissing -CommandName git -ChocoName git
-    Install-PackageIfMissing -CommandName gh  -ChocoName gh
+    Write-Host ""
+    Write-Host "Installing core packages..."
+    Install-PackageIfMissing -CommandName git  -ChocoName git
+    Install-PackageIfMissing -CommandName gh   -ChocoName gh
     Install-PackageIfMissing -CommandName code -ChocoName vscode
 
     Refresh-Environment
 
-    Write-Host "`n🔄 Checking and installing VS Code extensions..."
-    Install-VSCodeExtensionIfMissing -extensionId "ms-python.python"
-    Install-VSCodeExtensionIfMissing -extensionId "ms-toolsai.jupyter"
-    Install-VSCodeExtensionIfMissing -extensionId "ms-python.black-formatter"
+    Write-Host ""
+    Write-Host "Installing VS Code extensions..."
+    Install-VSCodeExtensionIfMissing -ExtensionId "ms-python.python"
+    Install-VSCodeExtensionIfMissing -ExtensionId "ms-toolsai.jupyter"
+    Install-VSCodeExtensionIfMissing -ExtensionId "ms-python.black-formatter"
 
     Configure-GitIdentity
     Authenticate-GitHubCLI
 
-    Start-Logging
     Validate-Setup
-} catch {
-    Write-Error "❌ Setup error: $($_.Exception.Message)"
+}
+catch {
+    Write-Error "Setup error: $($_.Exception.Message)"
     exit 1
-} finally {
+}
+finally {
     Stop-Logging
 }
