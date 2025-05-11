@@ -16,7 +16,11 @@
 # Globals & Logging
 # ---------------------------------------
 $TranscriptStarted = $false
-$LogFile = Join-Path $env:TEMP "setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+# Determine the directory containing this script
+$ScriptDir = $PSScriptRoot
+
+# Build a timestamped log filename in that same directory
+$LogFile   = Join-Path $ScriptDir "setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
 function Start-Logging {
     Start-Transcript -Path $LogFile -Force
@@ -125,11 +129,27 @@ function Prompt-NonEmpty {
 
 function Configure-GitIdentity {
     Write-Host ""
-    Write-Host "Configuring Git global user.name and user.email..."
-    $name  = Prompt-NonEmpty 'Enter your Git user.name'
-    $email = Prompt-NonEmpty 'Enter your Git user.email'
-    git config --global user.name  $name
-    git config --global user.email $email
+    $existingName  = git config --global user.name
+    $existingEmail = git config --global user.email
+
+    if (-not $existingName -or -not $existingEmail) {
+        Write-Host "Configuring Git global user.name and user.email..."
+        if (-not $existingName) {
+            $name = Prompt-NonEmpty 'Enter your Git user.name'
+            git config --global user.name $name
+        } else {
+            Write-Host "Git user.name already configured: $existingName"
+        }
+
+        if (-not $existingEmail) {
+            $email = Prompt-NonEmpty 'Enter your Git user.email'
+            git config --global user.email $email
+        } else {
+            Write-Host "Git user.email already configured: $existingEmail"
+        }
+    } else {
+        Write-Host "Git user.name and user.email already configured."
+    }
 }
 
 # ---------------------------------------
@@ -183,6 +203,7 @@ try {
     Write-Host "Upgrading pip and installing pipx via Python..."
     python -m pip install --upgrade pip
     python -m pip install --user pipx
+    python -m pipx ensurepath
     Refresh-Environment
     Write-Host "Installing UV and utkarshpy via pipx..."
     pipx install uv
