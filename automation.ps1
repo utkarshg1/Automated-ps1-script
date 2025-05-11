@@ -1,24 +1,12 @@
-#.SYNOPSIS
-#  Automated dev-environment setup: Chocolatey, Git, GitHub CLI, VS Code & extensions, Git identity, GitHub auth, Python tooling.
-#.DESCRIPTION
-#  - Install Chocolatey if missing.
-#  - Install Git, gh, VS Code.
-#  - Upgrade pip and install pipx/user packages.
-#  - Install VS Code Python, Jupyter, Black extensions.
-#  - Prompt for Git user.name/email.
-#  - Configure Git global identity.
-#  - Run GitHub CLI login.
-#  - Log all actions; trap errors.
+# Automated dev-environment setup: Chocolatey, Git, GitHub CLI, VS Code & extensions, Git identity, GitHub auth, Python tooling
+# Uses Chocolatey builtin `refreshenv` to reload environment variables
 
 # ---------------------------------------
 # Globals & Logging
 # ---------------------------------------
 $TranscriptStarted = $false
-# Determine the directory containing this script
-$ScriptDir = $PSScriptRoot
-
-# Build a timestamped log filename in that same directory
-$LogFile   = Join-Path $ScriptDir "setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+$ScriptDir         = $PSScriptRoot
+$LogFile           = Join-Path $ScriptDir "setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
 
 function Start-Logging {
     Start-Transcript -Path $LogFile -Force
@@ -32,7 +20,6 @@ function Stop-Logging {
         Write-Host "Setup complete. Log file: $LogFile"
     }
 }
-
 
 # ---------------------------------------
 # Chocolatey & Environment
@@ -48,16 +35,6 @@ function Install-Chocolatey {
     }
 }
 
-function Refresh-Environment {
-    $chocoPath = (Get-Command choco -ErrorAction SilentlyContinue).Source
-    if ($chocoPath) {
-        $installRoot = Split-Path (Split-Path $chocoPath -Parent) -Parent
-        $profilePath = Join-Path $installRoot 'helpers\chocolateyProfile.psm1'
-        if (Test-Path $profilePath) { Import-Module $profilePath }
-    }
-    Try { Update-SessionEnvironment } Catch { }
-}
-
 # ---------------------------------------
 # Package Installation
 # ---------------------------------------
@@ -69,6 +46,8 @@ function Install-PackageIfMissing {
     if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
         Write-Host "$ChocoName not found. Installing..."
         choco install $ChocoName -y
+        Write-Host "Refreshing environment via refreshenv..."
+        refreshenv
     } else {
         Write-Host "$ChocoName already installed."
     }
@@ -79,11 +58,7 @@ function Install-PackageIfMissing {
 # ---------------------------------------
 function Is-VSCodeExtensionInstalled {
     param([string]$ExtensionId)
-    Try {
-        return (code --list-extensions) -contains $ExtensionId
-    } Catch {
-        return $false
-    }
+    Try { (code --list-extensions) -contains $ExtensionId } Catch { $false }
 }
 
 function Install-VSCodeExtensionIfMissing {
@@ -101,9 +76,8 @@ function Install-VSCodeExtensionIfMissing {
 # ---------------------------------------
 function Prompt-NonEmpty {
     param([string]$PromptText)
-    do {
-        $resp = Read-Host -Prompt $PromptText
-    } while ([string]::IsNullOrWhiteSpace($resp))
+    do { $resp = Read-Host -Prompt $PromptText }
+    while ([string]::IsNullOrWhiteSpace($resp))
     return $resp
 }
 
@@ -137,7 +111,6 @@ function Configure-GitIdentity {
 # ---------------------------------------
 function Authenticate-GitHubCLI {
     Write-Host ""
-    # Check if user is already authenticated
     $authStatus = gh auth status 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "GitHub CLI already authenticated."
@@ -173,42 +146,38 @@ function Validate-Setup {
 try {
     Start-Logging
 
+    # Install Chocolatey, then load helper and refresh session
     Install-Chocolatey
-    Refresh-Environment
+    Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1" -ErrorAction SilentlyContinue
+    Write-Host "Refreshing environment via refreshenv..."
+    refreshenv
 
     Write-Host ""
     Write-Host "Updating Chocolatey..."
     choco upgrade chocolatey -y
-    Refresh-Environment
+    Write-Host "Refreshing environment via refreshenv..."
+    refreshenv
 
     Write-Host ""
     Write-Host "Installing core packages..."
     Install-PackageIfMissing -CommandName python -ChocoName python
-    Install-PackageIfMissing -CommandName git  -ChocoName git
-    Install-PackageIfMissing -CommandName gh   -ChocoName gh
-    Install-PackageIfMissing -CommandName code -ChocoName vscode
+    Install-PackageIfMissing -CommandName git    -ChocoName git
+    Install-PackageIfMissing -CommandName gh     -ChocoName gh
+    Install-PackageIfMissing -CommandName code   -ChocoName vscode
 
-    # Python tooling
     Write-Host ""
     Write-Host "Upgrading pip and installing pipx via Python..."
     python -m pip install --upgrade pip
     python -m pip install --user pipx
     python -m pipx ensurepath
-   
-    # ——— NEW: safely reload PowerShell profile so pipx/Chocolatey paths take effect ———
-    Try {
-        Write-Host "Reloading PowerShell profile from $PROFILE.CurrentUserAllHosts"
-        . $PROFILE.CurrentUserAllHosts -ErrorAction Stop
-    } Catch {
-        Write-Warning "Profile reload failed: $($_.Exception.Message). Skipping…"
-    }
+    Write-Host "Refreshing environment via refreshenv..."
+    refreshenv
 
-    Refresh-Environment
     Write-Host "Installing UV and utkarshpy via pipx..."
     pipx install uv
     pipx install utkarshpy
-
-    Refresh-Environment
+    Write-Host "Refreshing environment via refreshenv..."
+    refreshenv
 
     Write-Host ""
     Write-Host "Installing VS Code extensions..."
@@ -223,10 +192,8 @@ try {
 }
 catch {
     Write-Error "Setup error: $($_.Exception.Message)"
-    # Make sure we still call Stop-Logging even if there's an error
     Stop-Logging
     exit 1
 }
 
-# Always stop logging at the end, regardless of success or failure
 Stop-Logging
