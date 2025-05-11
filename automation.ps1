@@ -46,7 +46,6 @@ function Install-PackageIfMissing {
     if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
         Write-Host "$ChocoName not found. Installing..."
         choco install $ChocoName -y
-        Write-Host "Refreshing environment via refreshenv..."
         refreshenv
     } else {
         Write-Host "$ChocoName already installed."
@@ -155,7 +154,6 @@ try {
     Write-Host ""
     Write-Host "Updating Chocolatey..."
     choco upgrade chocolatey -y
-    Write-Host "Refreshing environment via refreshenv..."
     refreshenv
 
     Write-Host ""
@@ -170,13 +168,11 @@ try {
     python -m pip install --upgrade pip
     python -m pip install --user pipx
     python -m pipx ensurepath
-    Write-Host "Refreshing environment via refreshenv..."
     refreshenv
 
     Write-Host "Installing UV and utkarshpy via pipx..."
     pipx install uv
     pipx install utkarshpy
-    Write-Host "Refreshing environment via refreshenv..."
     refreshenv
 
     Write-Host ""
