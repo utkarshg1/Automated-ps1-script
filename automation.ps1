@@ -1,8 +1,6 @@
 #.SYNOPSIS
 #  Automated dev-environment setup: Chocolatey, Git, GitHub CLI, VS Code & extensions, Git identity, GitHub auth, Python tooling.
 #.DESCRIPTION
-#  - Bypass PS execution policy for this session.
-#  - Ensure elevated (Admin) privileges.
 #  - Install Chocolatey if missing.
 #  - Install Git, gh, VS Code.
 #  - Upgrade pip and install pipx/user packages.
@@ -35,24 +33,6 @@ function Stop-Logging {
     }
 }
 
-# ---------------------------------------
-# Elevation & Execution Policy
-# ---------------------------------------
-function Ensure-Admin {
-    $isAdmin = ([Security.Principal.WindowsPrincipal] `
-        [Security.Principal.WindowsIdentity]::GetCurrent()
-    ).IsInRole([Security.Principal.WindowsBuiltinRole] "Administrator")
-    if (-not $isAdmin) {
-        Write-Host "Relaunching as Administrator..."
-        Start-Process powershell.exe -Verb RunAs `
-            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","`"$($MyInvocation.MyCommand.Path)`"" 
-        exit
-    }
-}
-
-function Ensure-ExecutionPolicy {
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-}
 
 # ---------------------------------------
 # Chocolatey & Environment
@@ -192,8 +172,6 @@ function Validate-Setup {
 # ---------------------------------------
 try {
     Start-Logging
-    Ensure-Admin
-    Ensure-ExecutionPolicy
 
     Install-Chocolatey
     Refresh-Environment
