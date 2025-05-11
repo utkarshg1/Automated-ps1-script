@@ -216,6 +216,15 @@ try {
     python -m pip install --upgrade pip
     python -m pip install --user pipx
     python -m pipx ensurepath
+   
+    # ——— NEW: safely reload PowerShell profile so pipx/Chocolatey paths take effect ———
+    Try {
+        Write-Host "Reloading PowerShell profile from $PROFILE.CurrentUserAllHosts"
+        . $PROFILE.CurrentUserAllHosts -ErrorAction Stop
+    } Catch {
+        Write-Warning "Profile reload failed: $($_.Exception.Message). Skipping…"
+    }
+
     Refresh-Environment
     Write-Host "Installing UV and utkarshpy via pipx..."
     pipx install uv
