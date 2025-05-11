@@ -8,26 +8,36 @@ on:
 
 jobs:
   run-elevated-script:
-    runs-on: windows-latest # Hosted Windows runner with admin rights :contentReference[oaicite:3]{index=3}
+    runs-on: windows-latest # runs as Administrator by default :contentReference[oaicite:2]{index=2}
 
     steps:
-      - name: Checkout repository # Fetch your code (including run.bat & automation.ps1) :contentReference[oaicite:4]{index=4}
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3 # :contentReference[oaicite:3]{index=3}
 
-      - name: Display .bat contents # Optional: confirm the batch file is present
+      - name: Show current directory
         shell: cmd
-        run: type "%{ github.workspace }%\\run.bat"
+        run: |
+          echo Current folder is:
+          echo %CD%                                                      # prints GITHUB_WORKSPACE by default :contentReference[oaicite:4]{index=4}
 
-      - name: Run run.bat with elevation
-        shell: cmd # Use cmd to execute .bat files :contentReference[oaicite:5]{index=5}
-        run: call "%{ github.workspace }%\\run.bat"
+      - name: Confirm presence of run.bat
+        shell: cmd
+        run: |
+          echo Listing repo root:
+          dir .
 
-      - name: Verify PowerShell script ran
+      - name: Display run.bat contents
+        shell: cmd
+        run: type .\run.bat # simpler relative path :contentReference[oaicite:5]{index=5}
+
+      - name: Execute run.bat
+        shell: cmd
+        run: call .\run.bat # `call` returns to the workflow on exit :contentReference[oaicite:6]{index=6}
+
+      - name: Verify PS script ran
         shell: pwsh
         run: |
-          # Example check: confirm log file or output
-          if (-Not (Test-Path "$PWD\\setup_*.log")) {
-            Write-Error "Expected log file was not created."
-          } else {
-            Write-Host "Log file found – PowerShell script executed successfully."
-          }
+          # Check for the transcript logfile your PS script generates
+          $logs = Get-ChildItem -Path $PWD -Filter "setup_*.log"
+          if (-not $logs) { Write-Error "No log files found – script may not have run." }
+          else { Write-Host "Found transcript:"; $logs.FullName }
