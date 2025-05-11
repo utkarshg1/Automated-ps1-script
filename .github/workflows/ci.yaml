@@ -1,0 +1,33 @@
+name: Test Elevated PowerShell via Batch
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  run-elevated-script:
+    runs-on: windows-latest # Hosted Windows runner with admin rights :contentReference[oaicite:3]{index=3}
+
+    steps:
+      - name: Checkout repository # Fetch your code (including run.bat & automation.ps1) :contentReference[oaicite:4]{index=4}
+        uses: actions/checkout@v3
+
+      - name: Display .bat contents # Optional: confirm the batch file is present
+        shell: cmd
+        run: type "%{ github.workspace }%\\run.bat"
+
+      - name: Run run.bat with elevation
+        shell: cmd # Use cmd to execute .bat files :contentReference[oaicite:5]{index=5}
+        run: call "%{ github.workspace }%\\run.bat"
+
+      - name: Verify PowerShell script ran
+        shell: pwsh
+        run: |
+          # Example check: confirm log file or output
+          if (-Not (Test-Path "$PWD\\setup_*.log")) {
+            Write-Error "Expected log file was not created."
+          } else {
+            Write-Host "Log file found – PowerShell script executed successfully."
+          }
