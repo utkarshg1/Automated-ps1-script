@@ -1,17 +1,16 @@
-<#
-.SYNOPSIS
-  Automated dev-environment setup: Chocolatey, Git, GitHub CLI, VS Code & extensions, Git identity, and GitHub auth.
-.DESCRIPTION
-  - Bypass PS execution policy for this session.
-  - Ensure elevated (Admin) privileges.
-  - Install Chocolatey if missing.
-  - Install Git, gh, VS Code.
-  - Install VS Code Python, Jupyter, Black extensions.
-  - Prompt for Git user.name/email.
-  - Configure Git global identity.
-  - Run GitHub CLI login.
-  - Log all actions; trap errors.
-#>
+#.SYNOPSIS
+#  Automated dev-environment setup: Chocolatey, Git, GitHub CLI, VS Code & extensions, Git identity, GitHub auth, Python tooling.
+#.DESCRIPTION
+#  - Bypass PS execution policy for this session.
+#  - Ensure elevated (Admin) privileges.
+#  - Install Chocolatey if missing.
+#  - Install Git, gh, VS Code.
+#  - Upgrade pip and install pipx/user packages.
+#  - Install VS Code Python, Jupyter, Black extensions.
+#  - Prompt for Git user.name/email.
+#  - Configure Git global identity.
+#  - Run GitHub CLI login.
+#  - Log all actions; trap errors.
 
 # ---------------------------------------
 # Globals & Logging
@@ -151,6 +150,11 @@ function Validate-Setup {
     Write-Host "  Git version: $(git --version)"
     Write-Host "  gh version:  $(gh --version)"
     Write-Host "  Code version: $(code --version)"
+    Write-Host "  Python version: $(python --version)"
+    Write-Host "  pip version: $(pip --version)"
+    Write-Host "  pipx version: $(pipx --version)"
+    Write-Host "  uv version: $(uv --version)"
+    Write-Host "  utkarshpy version: $(utkarshpy --version)"
     Write-Host "  PATH entries:"
     $env:Path -split ';' | Where-Object { $_ -match 'Git|gh.exe|Code.exe' } |
       ForEach-Object { Write-Host "    $_" }
@@ -169,9 +173,20 @@ try {
 
     Write-Host ""
     Write-Host "Installing core packages..."
+    Install-PackageIfMissing -CommandName python -ChocoName python
     Install-PackageIfMissing -CommandName git  -ChocoName git
     Install-PackageIfMissing -CommandName gh   -ChocoName gh
     Install-PackageIfMissing -CommandName code -ChocoName vscode
+
+    # Python tooling
+    Write-Host ""
+    Write-Host "Upgrading pip and installing pipx via Python..."
+    python -m pip install --upgrade pip
+    python -m pip install --user pipx
+    Refresh-Environment
+    Write-Host "Installing UV and utkarshpy via pipx..."
+    pipx install uv
+    pipx install utkarshpy
 
     Refresh-Environment
 
