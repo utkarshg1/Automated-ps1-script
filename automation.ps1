@@ -44,7 +44,7 @@ function Ensure-Admin {
     ).IsInRole([Security.Principal.WindowsBuiltinRole] "Administrator")
     if (-not $isAdmin) {
         Write-Host "Relaunching as Administrator..."
-        Start-Process pwsh -Verb RunAs `
+        Start-Process powershell.exe -Verb RunAs `
             -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","`"$($MyInvocation.MyCommand.Path)`"" 
         exit
     }
