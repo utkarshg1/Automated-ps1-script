@@ -157,8 +157,14 @@ function Configure-GitIdentity {
 # ---------------------------------------
 function Authenticate-GitHubCLI {
     Write-Host ""
-    Write-Host "Launching GitHub CLI login..."
-    gh auth login --hostname github.com --scopes repo,workflow
+    # Check if user is already authenticated
+    $authStatus = gh auth status 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "GitHub CLI already authenticated."
+    } else {
+        Write-Host "GitHub CLI not authenticated. Launching login..."
+        gh auth login --hostname github.com --scopes repo,workflow
+    }
 }
 
 # ---------------------------------------
@@ -167,6 +173,7 @@ function Authenticate-GitHubCLI {
 function Validate-Setup {
     Write-Host ""
     Write-Host "Validation Results:"
+    Write-Host "  Chocolatey version: $(choco --version)"
     Write-Host "  Git version: $(git --version)"
     Write-Host "  gh version:  $(gh --version)"
     Write-Host "  Code version: $(code --version)"
@@ -189,6 +196,11 @@ try {
     Ensure-ExecutionPolicy
 
     Install-Chocolatey
+    Refresh-Environment
+
+    Write-Host ""
+    Write-Host "Updating Chocolatey..."
+    choco upgrade chocolatey -y
     Refresh-Environment
 
     Write-Host ""
