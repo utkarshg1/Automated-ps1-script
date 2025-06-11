@@ -115,7 +115,7 @@ function Authenticate-GitHubCLI {
         Write-Host "GitHub CLI already authenticated."
     } else {
         Write-Host "GitHub CLI not authenticated. Launching login..."
-        gh auth login --hostname github.com --scopes repo,workflow
+        gh auth login --hostname github.com
     }
 }
 
