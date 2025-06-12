@@ -158,7 +158,7 @@ try {
 
     Write-Host ""
     Write-Host "Installing core packages..."
-    Install-PackageIfMissing -CommandName python -ChocoName python
+    Install-PackageIfMissing -CommandName python -ChocoName python313
     Install-PackageIfMissing -CommandName git    -ChocoName git
     Install-PackageIfMissing -CommandName gh     -ChocoName gh
     Install-PackageIfMissing -CommandName code   -ChocoName vscode
